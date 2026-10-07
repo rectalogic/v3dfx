@@ -1,0 +1,60 @@
+[workspace]
+members = [
+    "xtask",
+    "plugins/v3dfx_source",
+    "plugins/v3dfx_filter",
+    "plugins/v3dfx_mixer2",
+    "plugins/v3dfx_mixer3",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/rectalogic/v3dfx"
+description = "frei0r plugins that render a 3D GLTF scene"
+readme = "README.md"
+keywords = ["frei0r", "video", "gltf", "3d"]
+categories = ["multimedia", "multimedia::video"]
+
+[package]
+name = "v3dfx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[workspace.dependencies]
+anyhow = "1.0.102"
+
+[dependencies]
+anyhow.workspace = true
+env_logger = "0.11.11"
+frei0r-rs2 = { git = "https://github.com/rectalogic/frei0r-rs.git", tag = "3.0.0" }
+futures-lite = "2.6.1"
+gltf = { version = "1.4,1", features = ["KHR_lights_punctual", "KHR_materials_unlit", "KHR_materials_emissive_strength", "extras", "extensions"] }
+log = { version = "0.4.34", features = ["std"] }
+renderling = { git = "https://github.com/schell/renderling.git", rev = "46bf54c" }
+wgpu = "26.0"
+
+[patch.crates-io]
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu.git", rev = "05b34493ce661dccd6694cf58afc13e3c8f7a7e0" }
+
+[profile.release]
+lto = true
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+multiple_crate_versions = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
