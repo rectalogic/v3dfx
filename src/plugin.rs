@@ -6,7 +6,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::renderer::Renderer;
+use crate::renderer::{Renderer, Scene};
 
 pub mod filter;
 pub mod mixer2;
@@ -15,9 +15,9 @@ pub mod source;
 
 pub struct V3dfxPlugin<PI: PluginInfo, const S: usize> {
     gltf_path: CString,
-    width: u32,
-    height: u32,
-    renderer: Option<Result<Renderer<S>, ()>>,
+
+    renderer: Renderer<S>,
+    scene: Option<Result<Scene<S>, ()>>,
     _phantom: PhantomData<PI>,
 }
 
@@ -29,44 +29,45 @@ where
         env_logger::init();
         Self {
             gltf_path: c"".to_owned(),
-            width,
-            height,
-            renderer: None,
+            renderer: std::thread::spawn(|| Renderer::new(width, height))
+                .join()
+                .unwrap(),
+            scene: None,
             _phantom: PhantomData,
         }
     }
 
     fn update(&mut self, time: f64, inframes: [&[u32]; S], outframe: &mut [u32]) {
-        let renderer = match self.renderer {
-            Some(Ok(ref mut renderer)) => renderer,
+        let scene = match self.scene {
+            Some(Ok(ref mut scene)) => scene,
             Some(Err(())) => return,
             None => {
                 if let Ok(gltf_path) = self.gltf_path.to_str()
                     && let Ok(gltf_path) = std::path::absolute(gltf_path)
                     && let Some(gltf_path) = gltf_path.to_str()
                 {
-                    match Renderer::<S>::new(gltf_path, self.width, self.height) {
-                        Ok(renderer) => {
-                            self.renderer = Some(Ok(renderer));
-                            self.renderer.as_mut().unwrap().as_mut().unwrap()
+                    match self.renderer.load(gltf_path) {
+                        Ok(scene) => {
+                            self.scene = Some(Ok(scene));
+                            self.scene.as_mut().unwrap().as_mut().unwrap()
                         }
                         Err(e) => {
-                            log::error!("v3dfx: failed to create renderer `{e:?}'");
-                            self.renderer = Some(Err(()));
+                            log::error!("v3dfx: failed to create renderer scene `{e:?}'");
+                            self.scene = Some(Err(()));
                             return;
                         }
                     }
                 } else {
                     log::error!("v3dfx: invalid gltf_path `{:?}'", self.gltf_path);
-                    self.renderer = Some(Err(()));
+                    self.scene = Some(Err(()));
                     return;
                 }
             }
         };
 
-        if let Err(e) = renderer.render(time, inframes, outframe) {
+        if let Err(e) = self.renderer.render(time, scene, inframes, outframe) {
             log::error!("v3dfx: failed to render frame: {e:?}");
-            self.renderer = Some(Err(()));
+            self.scene = Some(Err(()));
         }
     }
 }

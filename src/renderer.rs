@@ -16,27 +16,42 @@ use renderling::{
 const VIDEO_NAME_PREFIX: &str = "Video";
 
 pub struct Renderer<const S: usize> {
+    width: u32,
+    height: u32,
     context: Context,
     stage: Stage,
+}
+
+pub struct Scene<const S: usize> {
     video_textures: [AtlasTexture; S],
     animators: Vec<Animator>,
 }
 
 impl<const S: usize> Renderer<S> {
-    pub fn new(gltf_path: impl AsRef<Path>, width: u32, height: u32) -> anyhow::Result<Self> {
+    pub fn new(width: u32, height: u32) -> Self {
         let context =
             futures_lite::future::block_on(async { Context::headless(width, height).await });
         let stage: Stage = context.new_stage();
+        Self {
+            width,
+            height,
+            context,
+            stage,
+        }
+    }
+
+    pub fn load(&mut self, gltf_path: impl AsRef<Path>) -> anyhow::Result<Scene<S>> {
         let (schema, buffers, images) = gltf::import(gltf_path.as_ref())?;
-        let document = GltfDocument::from_gltf(&stage, &schema, buffers, images)?;
+        let document = GltfDocument::from_gltf(&self.stage, &schema, buffers, images)?;
 
         let blanks: [AtlasImage; S] = core::array::from_fn(|_| AtlasImage {
-            pixels: vec![0u8; (width * height * 4) as usize],
-            size: UVec2::new(width, height),
+            pixels: vec![0u8; (self.width * self.height * 4) as usize],
+            size: UVec2::new(self.width, self.height),
             format: AtlasImageFormat::R8G8B8A8,
             apply_linear_transfer: true,
         });
-        let video_textures: [AtlasTexture; S] = stage
+        let video_textures: [AtlasTexture; S] = self
+            .stage
             .add_images(blanks)?
             .try_into()
             .map_err(|_| anyhow::anyhow!("const size"))?;
@@ -62,9 +77,7 @@ impl<const S: usize> Renderer<S> {
 
         let _model = document.into_gpu_only();
 
-        Ok(Self {
-            context,
-            stage,
+        Ok(Scene {
             video_textures,
             animators,
         })
@@ -73,6 +86,7 @@ impl<const S: usize> Renderer<S> {
     pub fn render(
         &mut self,
         time: f64,
+        scene: &mut Scene<S>,
         inframes: [&[u32]; S],
         output: &mut [u32],
     ) -> anyhow::Result<()> {
@@ -80,7 +94,7 @@ impl<const S: usize> Renderer<S> {
         for i in 0..S {
             let materials: &Materials = self.stage.as_ref();
             let atlas = materials.atlas();
-            let desc = self.video_textures[i].descriptor();
+            let desc = scene.video_textures[i].descriptor();
             let bytes = convert_pixels(
                 slice_to_bytes(inframes[i]).iter().copied(),
                 AtlasImageFormat::R8G8B8A8,
@@ -104,7 +118,7 @@ impl<const S: usize> Renderer<S> {
             );
         }
 
-        for a in self.animators.iter_mut() {
+        for a in scene.animators.iter_mut() {
             a.progress(0.33 /*XXX need delta */)?;
         }
 
@@ -113,6 +127,7 @@ impl<const S: usize> Renderer<S> {
         let image = futures_lite::future::block_on(async { frame.read_image().await })?;
         slice_to_bytes_mut(output).copy_from_slice(&image);
         frame.present();
+
         Ok(())
     }
 }
