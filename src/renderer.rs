@@ -76,6 +76,7 @@ impl<const S: usize> Renderer<S> {
         inframes: [&[u32]; S],
         output: &mut [u32],
     ) -> anyhow::Result<()> {
+        #[expect(clippy::needless_range_loop)]
         for i in 0..S {
             let materials: &Materials = self.stage.as_ref();
             let atlas = materials.atlas();
