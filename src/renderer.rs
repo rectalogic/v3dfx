@@ -44,6 +44,22 @@ impl<const S: usize> Renderer<S> {
         let (schema, buffers, images) = gltf::import(gltf_path.as_ref())?;
         let document = GltfDocument::from_gltf(&self.stage, &schema, buffers, images)?;
 
+        let video_textures = self.load_video_textures(&schema, &document)?;
+        let animators = Self::load_animators(&document);
+
+        let _model = document.into_gpu_only();
+
+        Ok(Scene {
+            video_textures,
+            animators,
+        })
+    }
+
+    fn load_video_textures(
+        &self,
+        schema: &gltf::Document,
+        document: &GltfDocument,
+    ) -> anyhow::Result<[AtlasTexture; S]> {
         let blanks: [AtlasImage; S] = core::array::from_fn(|_| AtlasImage {
             pixels: vec![0u8; (self.width * self.height * 4) as usize],
             size: UVec2::new(self.width, self.height),
@@ -63,24 +79,20 @@ impl<const S: usize> Renderer<S> {
                 document.materials[material_index].set_albedo_texture(&video_textures[i]);
             }
         });
+        Ok(video_textures)
+    }
 
+    fn load_animators(document: &GltfDocument) -> Vec<Animator> {
         // Animators: one per clip, driving every node in the scene
         let all_nodes: Vec<&GltfNode> = document
             .recursive_nodes_in_scene(document.default_scene.unwrap_or_default())
             .collect();
-        let animators: Vec<Animator> = document
+        document
             .animations
             .clone()
             .into_iter()
             .map(|anim| Animator::new(all_nodes.iter().cloned(), anim))
-            .collect();
-
-        let _model = document.into_gpu_only();
-
-        Ok(Scene {
-            video_textures,
-            animators,
-        })
+            .collect()
     }
 
     pub fn render(
