@@ -18,6 +18,7 @@ const VIDEO_NAME_PREFIX: &str = "Video";
 pub struct Renderer<const S: usize> {
     width: u32,
     height: u32,
+    time: Option<f64>,
     context: Context,
     stage: Stage,
 }
@@ -35,6 +36,7 @@ impl<const S: usize> Renderer<S> {
         Self {
             width,
             height,
+            time: None,
             context,
             stage,
         }
@@ -102,6 +104,19 @@ impl<const S: usize> Renderer<S> {
         inframes: [&[u32]; S],
         output: &mut [u32],
     ) -> anyhow::Result<()> {
+        self.upload_video_frames(inframes, scene);
+        self.drive_animators(time, scene)?;
+
+        let frame = self.context.get_next_frame()?;
+        self.stage.render(&frame.view());
+        let image = futures_lite::future::block_on(async { frame.read_image().await })?;
+        slice_to_bytes_mut(output).copy_from_slice(&image);
+        frame.present();
+
+        Ok(())
+    }
+
+    fn upload_video_frames(&self, inframes: [&[u32]; S], scene: &mut Scene<S>) {
         #[expect(clippy::needless_range_loop)]
         for i in 0..S {
             let materials: &Materials = self.stage.as_ref();
@@ -129,17 +144,17 @@ impl<const S: usize> Renderer<S> {
                 desc.size_as_extent(),
             );
         }
+    }
 
+    fn drive_animators(&mut self, time: f64, scene: &mut Scene<S>) -> anyhow::Result<()> {
+        let delta = if let Some(last_time) = self.time.replace(time) {
+            time - last_time
+        } else {
+            0.0
+        };
         for a in scene.animators.iter_mut() {
-            a.progress(0.33 /*XXX need delta */)?;
+            a.progress(delta as f32)?;
         }
-
-        let frame = self.context.get_next_frame()?;
-        self.stage.render(&frame.view());
-        let image = futures_lite::future::block_on(async { frame.read_image().await })?;
-        slice_to_bytes_mut(output).copy_from_slice(&image);
-        frame.present();
-
         Ok(())
     }
 }
