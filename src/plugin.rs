@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
+    any::Any,
     ffi::{CStr, CString},
     marker::PhantomData,
 };
@@ -16,7 +17,7 @@ pub mod source;
 pub struct V3dfxPlugin<PI: PluginInfo, const S: usize> {
     gltf_path: CString,
 
-    renderer: Renderer<S>,
+    renderer: Result<Renderer<S>, Box<dyn Any + Send + 'static>>,
     scene: Option<Result<Scene<S>, ()>>,
     _phantom: PhantomData<PI>,
 }
@@ -27,17 +28,24 @@ where
 {
     fn new(width: u32, height: u32) -> Self {
         env_logger::init();
+        // The native thread we are invoked on has too small stack size,
+        // so we construct renderer on a Rust thread with 1MB stack.
+        let renderer = std::thread::spawn(move || Renderer::new(width, height)).join();
+        if let Err(ref e) = renderer {
+            log::error!("v3dfx: Failed to spawn renderer: {e:?}");
+        }
         Self {
             gltf_path: c"".to_owned(),
-            renderer: std::thread::spawn(|| Renderer::new(width, height))
-                .join()
-                .unwrap(),
+            renderer,
             scene: None,
             _phantom: PhantomData,
         }
     }
 
     fn update(&mut self, time: f64, inframes: [&[u32]; S], outframe: &mut [u32]) {
+        let Ok(ref mut renderer) = self.renderer else {
+            return;
+        };
         let scene = match self.scene {
             Some(Ok(ref mut scene)) => scene,
             Some(Err(())) => return,
@@ -46,7 +54,7 @@ where
                     && let Ok(gltf_path) = std::path::absolute(gltf_path)
                     && let Some(gltf_path) = gltf_path.to_str()
                 {
-                    match self.renderer.load(gltf_path) {
+                    match renderer.load(gltf_path) {
                         Ok(scene) => {
                             self.scene = Some(Ok(scene));
                             self.scene.as_mut().unwrap().as_mut().unwrap()
@@ -65,7 +73,7 @@ where
             }
         };
 
-        if let Err(e) = self.renderer.render(time, scene, inframes, outframe) {
+        if let Err(e) = renderer.render(time, scene, inframes, outframe) {
             log::error!("v3dfx: failed to render frame: {e:?}");
             self.scene = Some(Err(()));
         }
