@@ -2505,7 +2505,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderling"
 version = "0.6.0"
-source = "git+https://github.com/schell/renderling.git?rev=46bf54c#46bf54c8ff5b88d62e54112e0dbc55188fba6824"
+source = "git+https://github.com/schell/renderling.git?rev=92caaba#92caaba086dbd3ccd7d7e83adcb6738694351cf6"
 dependencies = [
  "async-channel",
  "bytemuck",
@@ -2538,7 +2538,7 @@ dependencies = [
 [[package]]
 name = "renderling_build"
 version = "0.1.0"
-source = "git+https://github.com/schell/renderling.git?rev=46bf54c#46bf54c8ff5b88d62e54112e0dbc55188fba6824"
+source = "git+https://github.com/schell/renderling.git?rev=92caaba#92caaba086dbd3ccd7d7e83adcb6738694351cf6"
 dependencies = [
  "log",
  "naga",
@@ -3121,7 +3121,6 @@ dependencies = [
  "gltf",
  "log",
  "renderling",
- "wgpu",
 ]
 
 [[package]]

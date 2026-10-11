@@ -1,11 +1,11 @@
 // Copyright (C) 2026 Andrew Wason
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::path::Path;
+use std::{iter::zip, path::Path};
 
 use frei0r_rs2::{slice_to_bytes, slice_to_bytes_mut};
 use renderling::{
-    atlas::{AtlasImage, AtlasImageFormat, AtlasTexture, convert_pixels},
+    atlas::{AtlasImage, AtlasImageFormat, AtlasTexture},
     context::Context,
     glam::UVec2,
     gltf::{Animator, GltfDocument, GltfNode},
@@ -104,7 +104,7 @@ impl<const S: usize> Renderer<S> {
         inframes: [&[u32]; S],
         output: &mut [u32],
     ) -> anyhow::Result<()> {
-        self.upload_video_frames(inframes, scene);
+        self.upload_video_frames(inframes, scene)?;
         self.drive_animators(time, scene)?;
 
         let frame = self.context.get_next_frame()?;
@@ -116,34 +116,27 @@ impl<const S: usize> Renderer<S> {
         Ok(())
     }
 
-    fn upload_video_frames(&self, inframes: [&[u32]; S], scene: &mut Scene<S>) {
-        #[expect(clippy::needless_range_loop)]
-        for i in 0..S {
-            let materials: &Materials = self.stage.as_ref();
-            let atlas = materials.atlas();
-            let desc = scene.video_textures[i].descriptor();
-            let bytes = convert_pixels(
-                slice_to_bytes(inframes[i]).iter().copied(),
-                AtlasImageFormat::R8G8B8A8,
-                atlas.get_texture().texture.format(),
-                true,
-            );
-            self.context.runtime().queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &atlas.get_texture().texture,
-                    mip_level: 0,
-                    origin: desc.origin(),
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &bytes,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * desc.size_px.x),
-                    rows_per_image: Some(desc.size_px.y),
-                },
-                desc.size_as_extent(),
-            );
-        }
+    fn upload_video_frames(
+        &self,
+        inframes: [&[u32]; S],
+        scene: &mut Scene<S>,
+    ) -> anyhow::Result<()> {
+        let materials: &Materials = self.stage.as_ref();
+        let atlas = materials.atlas();
+        atlas.update_images(zip(scene.video_textures.iter(), inframes).map(
+            |(texture, frame)| {
+                (
+                    texture,
+                    AtlasImage {
+                        pixels: slice_to_bytes(frame).into(),
+                        size: UVec2::new(self.width, self.height),
+                        format: AtlasImageFormat::R8G8B8A8,
+                        apply_linear_transfer: true,
+                    },
+                )
+            },
+        ))?;
+        Ok(())
     }
 
     fn drive_animators(&mut self, time: f64, scene: &mut Scene<S>) -> anyhow::Result<()> {

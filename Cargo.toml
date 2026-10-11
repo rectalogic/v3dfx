@@ -41,8 +41,7 @@ frei0r-rs2 = { git = "https://github.com/rectalogic/frei0r-rs.git", tag = "3.0.0
 futures-lite = "2.6.1"
 gltf = { version = "1.4,1", features = ["KHR_lights_punctual", "KHR_materials_unlit", "KHR_materials_emissive_strength", "extras", "extensions"] }
 log = { version = "0.4.34", features = ["std"] }
-renderling = { git = "https://github.com/schell/renderling.git", rev = "46bf54c" }
-wgpu = "26.0"
+renderling = { git = "https://github.com/schell/renderling.git", rev = "92caaba" }
 
 [patch.crates-io]
 spirv-std = { git = "https://github.com/rust-gpu/rust-gpu.git", rev = "05b34493ce661dccd6694cf58afc13e3c8f7a7e0" }
